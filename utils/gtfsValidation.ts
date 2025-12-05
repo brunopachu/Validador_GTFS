@@ -23,6 +23,166 @@ const timeToSeconds = (timeStr: string | undefined): number | null => {
   }
 };
 
+// --- LOGIC PORTED FROM PYTHON ---
+
+const getPortugueseHolidays = (): Set<string> => {
+    return new Set([
+        '2025-01-01', '2025-04-18', '2025-04-20', '2025-04-25',
+        '2025-05-01', '2025-06-08', '2025-06-10', '2025-08-15',
+        '2025-10-05', '2025-11-01', '2025-12-01', '2025-12-08',
+        '2025-12-25',
+        '2026-01-01', '2026-04-03', '2026-04-05', '2026-04-25',
+        '2026-05-01', '2026-06-04', '2026-06-10', '2026-08-15',
+        '2026-10-05', '2026-11-01', '2026-12-01', '2026-12-08',
+        '2026-12-25',
+        '2027-01-01'
+    ]);
+};
+
+const parseDateString = (dateStr: string): Date | null => {
+    if (!dateStr || dateStr.length !== 8) return null;
+    const year = parseInt(dateStr.substring(0, 4));
+    const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed in JS
+    const day = parseInt(dateStr.substring(6, 8));
+    return new Date(year, month, day);
+};
+
+const formatDateToISO = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const getPeriod = (currentDate: Date): number => {
+    const dayOfWeek = currentDate.getDay(); // 0 (Sun) to 6 (Sat)
+    
+    // Sábados (6) e domingos (0) -> sempre período 1
+    if (dayOfWeek === 6 || dayOfWeek === 0) {
+        return 1;
+    }
+
+    const isoDate = formatDateToISO(currentDate);
+    
+    // Período de Verão (2026-07-01 to 2026-08-31)
+    if (isoDate >= '2026-07-01' && isoDate <= '2026-08-31') {
+        return 3;
+    }
+
+    // Períodos Não Escolares
+    if (isoDate >= '2025-12-22' && isoDate <= '2025-12-31') return 2;
+    if (isoDate === '2026-01-02') return 2;
+    if (isoDate >= '2026-02-16' && isoDate <= '2026-02-18') return 2;
+    if (isoDate >= '2026-03-30' && isoDate <= '2026-04-02') return 2;
+
+    // Por defeito, período escolar
+    return 1;
+};
+
+const getDayType = (currentDate: Date, holidays: Set<string>): number => {
+    const dayOfWeek = currentDate.getDay(); // 0 (Sun) to 6 (Sat)
+    const isoDate = formatDateToISO(currentDate);
+
+    if (holidays.has(isoDate) || dayOfWeek === 0) {
+        return 3; // Domingo ou Feriado
+    } else if (dayOfWeek === 6) {
+        return 2; // Sábado
+    } else {
+        return 1; // Dia útil
+    }
+};
+
+const checkCalendarSpecialRules = (calendarDates: GTFSTable): ValidationResult[] => {
+    const holidays = getPortugueseHolidays();
+    const holidayErrors: string[] = [];
+    const periodErrors: string[] = [];
+    const dayTypeErrors: string[] = [];
+    const results: ValidationResult[] = [];
+
+    // Check if optional columns exist
+    if (!calendarDates || calendarDates.length === 0) return [];
+    
+    const hasColumns = 'holiday' in calendarDates[0] && 'period' in calendarDates[0] && 'day_type' in calendarDates[0];
+    
+    if (!hasColumns) {
+        return [{
+            title: 'Colunas Específicas em calendar_dates.txt',
+            status: 'INFO',
+            messages: ['O ficheiro não contém as colunas extra "holiday", "period" e "day_type", por isso as validações específicas foram ignoradas.'],
+            description: 'Validação de colunas personalizadas (não-GTFS padrão).',
+            category: 'CALENDAR'
+        }];
+    }
+
+    calendarDates.forEach((row, index) => {
+        const fileDateStr = row.date; // Assuming standard GTFS 'date' col serves as 'parts[4]' in python logic or the col is present.
+        // If the custom file uses 'date' as the 5th column, PapaParse usually maps it if header=true.
+        
+        if (!fileDateStr) return;
+
+        const fileDate = parseDateString(fileDateStr);
+        if (!fileDate) {
+             // Logic handled in general format check usually
+             return; 
+        }
+
+        const dateDisplay = fileDateStr;
+
+        // Holiday Check
+        const holidayFromFile = parseInt(row.holiday);
+        const isoDate = formatDateToISO(fileDate);
+        const expectedHoliday = holidays.has(isoDate) ? 1 : 0;
+        
+        if (!isNaN(holidayFromFile) && holidayFromFile !== expectedHoliday) {
+            holidayErrors.push(`Linha ${index + 2}: Data ${dateDisplay} - ERRO no 'holiday'. Esperado: ${expectedHoliday}, Ficheiro: ${holidayFromFile}`);
+        }
+
+        // Period Check
+        const periodFromFile = parseInt(row.period);
+        const expectedPeriod = getPeriod(fileDate);
+
+        if (!isNaN(periodFromFile) && periodFromFile !== expectedPeriod) {
+            periodErrors.push(`Linha ${index + 2}: Data ${dateDisplay} - ERRO no 'period'. Esperado: ${expectedPeriod}, Ficheiro: ${periodFromFile}`);
+        }
+
+        // Day Type Check
+        const dayTypeFromFile = parseInt(row.day_type);
+        const expectedDayType = getDayType(fileDate, holidays);
+
+        if (!isNaN(dayTypeFromFile) && dayTypeFromFile !== expectedDayType) {
+            dayTypeErrors.push(`Linha ${index + 2}: Data ${dateDisplay} - ERRO no 'day_type'. Esperado: ${expectedDayType}, Ficheiro: ${dayTypeFromFile}`);
+        }
+    });
+
+    results.push({
+        title: 'Validação do Campo "holiday"',
+        status: holidayErrors.length > 0 ? 'ERRO' : 'SUCESSO',
+        messages: holidayErrors.length > 0 ? limitarMensagens(holidayErrors) : ["Nenhum erro encontrado."],
+        description: REPORT_DESCRIPTIONS['Validação do Campo "holiday"'],
+        category: 'CALENDAR'
+    });
+
+    results.push({
+        title: 'Validação do Campo "period"',
+        status: periodErrors.length > 0 ? 'ERRO' : 'SUCESSO',
+        messages: periodErrors.length > 0 ? limitarMensagens(periodErrors) : ["Nenhum erro encontrado."],
+        description: REPORT_DESCRIPTIONS['Validação do Campo "period"'],
+        category: 'CALENDAR'
+    });
+
+    results.push({
+        title: 'Validação do Campo "day_type"',
+        status: dayTypeErrors.length > 0 ? 'ERRO' : 'SUCESSO',
+        messages: dayTypeErrors.length > 0 ? limitarMensagens(dayTypeErrors) : ["Nenhum erro encontrado."],
+        description: REPORT_DESCRIPTIONS['Validação do Campo "day_type"'],
+        category: 'CALENDAR'
+    });
+
+    return results;
+};
+
+// --- END LOGIC PORTED FROM PYTHON ---
+
 const getAllServiceIdsInUse = (trips: GTFSRow[], stopTimes: GTFSRow[], frequencies: GTFSRow[]): Set<string> => {
   const ids = new Set<string>();
   
@@ -516,7 +676,8 @@ export const runValidations = (data: GTFSData): ValidationResult[] => {
             title,
             status: res[0],
             messages: res[1],
-            description: REPORT_DESCRIPTIONS[title]
+            description: REPORT_DESCRIPTIONS[title],
+            category: 'GERAL'
         });
     };
 
@@ -574,6 +735,10 @@ export const runValidations = (data: GTFSData): ValidationResult[] => {
     } else {
         addResult('Integridade Referencial (Elos Partidos)', ['ERRO', limitarMensagens(riMessages)]);
     }
+
+    // --- ADD NEW CALENDAR VALIDATIONS ---
+    const calendarResults = checkCalendarSpecialRules(data.calendar_dates);
+    results.push(...calendarResults);
 
     return results;
 };

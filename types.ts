@@ -1,10 +1,13 @@
 export type ValidationStatus = 'SUCESSO' | 'AVISO' | 'ERRO' | 'INFO';
 
+export type ValidationCategory = 'GERAL' | 'CALENDAR';
+
 export interface ValidationResult {
   title: string;
   status: ValidationStatus;
   messages: string[];
   description?: string;
+  category: ValidationCategory;
 }
 
 export type GTFSRow = Record<string, string>;
@@ -48,4 +51,8 @@ export const REPORT_DESCRIPTIONS: Record<string, string> = {
   'Caracteres Corrompidos / Codificação': "Verificação de Caracteres Corrompidos.",
   'Espaços em Branco Indesejados': "Verificação de Espaços em Branco no Início ou Fim de Campos de Texto.",
   'Continuidade de stop_sequence em stop_times.txt': "Verifica se a sequência de paragens (stop_sequence) é contínua e crescente.",
+  // New descriptions
+  'Validação do Campo "holiday"': "Verifica se o campo 'holiday' (0 ou 1) corresponde corretamente aos feriados nacionais portugueses para cada data.",
+  'Validação do Campo "period"': "Verifica se o campo 'period' (1, 2 ou 3) está corretamente classificado como Escolar, Não Escolar ou Verão, de acordo com as regras definidas.",
+  'Validação do Campo "day_type"': "Verifica se o campo 'day_type' (1, 2 ou 3) corresponde corretamente ao tipo de dia (Útil, Sábado ou Domingo/Feriado)."
 };

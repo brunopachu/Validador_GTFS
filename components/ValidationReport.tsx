@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
-import { ValidationResult, ValidationStatus } from '../types';
+import { ValidationResult, ValidationStatus, ValidationCategory } from '../types';
 
 interface ValidationReportProps {
   results: ValidationResult[];
@@ -58,14 +58,43 @@ const ResultCard: React.FC<{ result: ValidationResult }> = ({ result }) => {
 };
 
 export const ValidationReport: React.FC<ValidationReportProps> = ({ results }) => {
+  const [activeTab, setActiveTab] = useState<ValidationCategory>('GERAL');
+
+  // Filter results by tab
+  const filteredResults = results.filter(r => r.category === activeTab);
+
   const summary = {
-    SUCESSO: results.filter(r => r.status === 'SUCESSO').length,
-    AVISO: results.filter(r => r.status === 'AVISO').length,
-    ERRO: results.filter(r => r.status === 'ERRO').length,
+    SUCESSO: filteredResults.filter(r => r.status === 'SUCESSO').length,
+    AVISO: filteredResults.filter(r => r.status === 'AVISO').length,
+    ERRO: filteredResults.filter(r => r.status === 'ERRO').length,
   };
 
   return (
     <div className="w-full">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          className={`px-4 py-2 font-medium text-sm transition-colors ${
+            activeTab === 'GERAL' 
+            ? 'border-b-2 border-blue-600 text-blue-600' 
+            : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('GERAL')}
+        >
+          Validação Geral
+        </button>
+        <button
+          className={`px-4 py-2 font-medium text-sm transition-colors ${
+            activeTab === 'CALENDAR' 
+            ? 'border-b-2 border-blue-600 text-blue-600' 
+            : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setActiveTab('CALENDAR')}
+        >
+          Calendar Dates
+        </button>
+      </div>
+
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-4 rounded-lg shadow-sm text-center border-t-4 border-green-500">
           <h3 className="text-gray-500 font-medium uppercase text-xs">Sucesso</h3>
@@ -82,9 +111,15 @@ export const ValidationReport: React.FC<ValidationReportProps> = ({ results }) =
       </div>
 
       <div>
-        {results.map((result, idx) => (
-          <ResultCard key={idx} result={result} />
-        ))}
+        {filteredResults.length === 0 ? (
+          <div className="text-center py-10 text-gray-500 italic">
+            Nenhuma verificação encontrada para esta categoria.
+          </div>
+        ) : (
+          filteredResults.map((result, idx) => (
+            <ResultCard key={idx} result={result} />
+          ))
+        )}
       </div>
     </div>
   );
