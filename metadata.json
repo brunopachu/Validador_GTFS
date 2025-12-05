@@ -1,0 +1,5 @@
+{
+  "name": "GTFS Validator Web",
+  "description": "A web-based tool to validate GTFS files locally using the browser. Upload a ZIP file to generate a comprehensive integrity and data quality report.",
+  "requestFramePermissions": []
+}
